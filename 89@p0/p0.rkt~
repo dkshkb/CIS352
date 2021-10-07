@@ -1,0 +1,247 @@
+#lang racket
+
+;;; Project 0 Tic-tac-toe with Racket
+;;; 
+;;; Please immediately read README.md
+
+(provide board?
+         next-player
+          valid-move?
+          make-move
+          winner?
+          calculate-next-move)
+
+;; 
+;; Useful utility functions
+;;
+
+; Returns the number of elements in l for which the predicate f
+; evaluates to #t. For example:
+;
+;    (count (lambda (x) (> x 0)) '(-5 0 1 -3 3 4)) => 3
+;    (count (lambda (x) (= x 0)) '(-5 0 1 -3 3 4)) => 1
+(define (count f l)
+  (cond [(empty? l) 0]
+        [(f (car l)) (add1 (count f (cdr l)))]
+        [else (count f (cdr l))]))
+
+;; 
+;; Your solution begins here
+;; 
+
+; Check whether a list is a valid board
+(define (board? lst)
+  (cond [(not (check-if-square? lst)) #f]
+        [(not (check-if-only-xoe? lst)) #f]
+        [(not (x-o-differ-by-at-most-1? lst)) #f]
+        [(not (x-move-first? lst)) #f]
+        [else #t]))
+
+;; The following are some helper functions for board?
+
+;;check if the length of a list is square of some integer
+(define check-if-square?
+  (lambda (lst)
+    (integer? (sqrt (count (lambda (x) #t) lst)))))
+;;check if only contains 'X 'O 'E
+(define (check-if-only-xoe? lst)
+  (cond [(empty? lst) #t]
+        [(equal? (car lst) 'X) (check-if-only-xoe? (cdr lst))]
+        [(equal? (car lst) 'O) (check-if-only-xoe? (cdr lst))]
+        [(equal? (car lst) 'E) (check-if-only-xoe? (cdr lst))]
+        [else #f]))
+;;check the number of a symbols in a list
+(define (number-of-symbol x lst)
+  (if (empty? lst) 0
+      (if (equal? x (car lst))
+          (+ 1 (number-of-symbol x (cdr lst)))
+          (number-of-symbol x (cdr lst)))))
+;;absolute value
+(define abs (lambda (x)
+              (if (< x 0) (- 0 x) x)))
+;;check if the number of 'X and 'O differ by at most 1
+(define (x-o-differ-by-at-most-1? lst) 
+  (< (abs (- (number-of-symbol 'X lst) (number-of-symbol 'O lst))) 2))
+;;check 'X moves first (check only one X on the board case)
+(define x-move-first? (lambda (lst)
+                       (if (empty? lst) #t
+                           (if (not (empty? (cdr lst))) #t
+                               (if (equal? 'X (car lst)) #t
+                                   #f)))))
+
+;;; From the board, calculate who is making a move this turn
+(define (next-player board)
+  (if (equal?
+       (number-of-symbol 'X board) (number-of-symbol 'O board))
+      'X
+      'O))
+
+;;; If player ('X or 'O) want to make a move, check whether it's this
+;;; player's turn and the position on the board is empty ('E)
+(define (valid-move? board row col player)
+  (if (not (list? board)) #f
+      (if (not (board? board)) #f
+          (if (not (and (number? row) (number? col))) #f
+              (if (not (or (equal? player 'X) (equal? player 'O))) #f
+                  (if (or (>
+                           (+ (* row (sqrt (count (lambda (x) #t) board))) col)
+                           (- (count (lambda (x) #t) board) 1))
+                          (< row 0)
+                          (< col 0)
+                          (> (+ 1 row) (sqrt (count (lambda (x) #t) board)))
+                          (> (+ 1 col) (sqrt (count (lambda (x) #t) board))))
+                          #f
+                          (if (not (equal? 'E
+                                      (n-of-list
+                                       (+ (* row (sqrt (count (lambda (x) #t) board))) col) board)))
+                              #f
+                              (if (equal? (next-player board) player) #t #f))))))))
+      
+;;Helper function: get the n-th element of a list
+(define (n-of-list n lst)
+  (if (equal? n 0) (car lst)
+      (n-of-list (- n 1) (cdr lst))))
+
+           
+;;; To make a move, replace the position at row col to player ('X or 'O)
+(define (make-move board row col player)
+  (replace-element (+ (* row (sqrt (count (lambda (x) #t) board))) col) board player))
+  
+;;Helper function: replace n-th element of a list with p
+(define (replace-element n lst p)
+  (if (equal? n 0)
+      (cons p (cdr lst))
+      (cons (car lst) (replace-element (- n 1) (cdr lst) p))))
+;;; To determine whether there is a winner?
+(define (winner? board)
+  (cond
+    [(full-col? board 'X 0) 'X] 
+    [(full-col? board 'O 0) 'O]
+    [(full-row? board 'X 0) 'X]
+    [(full-row? board 'O 0) 'O]
+    [(upperleft-lowerright? board 'X 0) 'X]
+    [(upperleft-lowerright? board 'O 0) 'O]
+    [(upperright-lowerleft? board 'X 1) 'X]
+    [(upperright-lowerleft? board 'O 1) 'O]
+    [else #f]))
+    
+
+;;Helper: check if it has a row (any row) full
+;;(define (full-row-or-col? board player)
+  
+;;if board is 3*3, n ranges 0,1,2, otherwise return #f
+;;chekc for n-th col
+(define (full-col-helper n board player) ;;n means col-index which is full
+  (if (or (< n 0) (> n (- (sqrt (count (lambda (x) #t) board)) 1))) #f
+      (if (not (equal? player (n-of-list n board))) #f
+          (if (>
+               (+ n (sqrt (count (lambda (x) #t) board)))
+               (- (count (lambda (x) #t) board) 1))
+              #t
+              (full-col-helper (+ n (sqrt (count (lambda (x) #t) board))) board player)))))
+;;set initial i=0, if board is 3*3, check from i = 0,1,2, any case is #t will return #t
+;;So, (full-col? board player 0) will check if player is full of any col
+(define (full-col? board player i)
+  (if (not (< i (sqrt (count (lambda (x) #t) board)))) #f
+      (if (full-col-helper i board player) #t
+          (full-col? board player (+ i 1)))))
+
+;;check for if n-th row
+;;if it's 3*3, n ranges 0,1,2 , otherwise it will return #f
+;;(full-row-helper 1 '(E E E X X X E E E) 'X) should return #t
+;;(full-row-helper 2 '(E E E X X X E E E) 'X) should return #f
+(define (full-row-helper n board player) ;;n means row-index which is full
+  (if (or (< n 0) (> n (- (sqrt (count (lambda (x) #t) board)) 1))) #f
+      (if (not (equal? player (n-of-list (* n (sqrt (count (lambda (x) #t) board))) board))) #f
+          (x-n-continue board
+                        (* n (sqrt (count (lambda (x) #t) board)))
+                        (sqrt (count (lambda (x) #t) board))))))
+
+(define (full-row? board player i)
+  (if (not (< i (sqrt (count (lambda (x) #t) board)))) #f
+      (if (full-row-helper i board player) #t
+          (full-row? board player (+ i 1)))))
+  
+;;Helper: start from x-th element, continuous n elements in a list are the same
+;;for example (x-n-continue '(1 2 2 2 3) 1 3) should return #t;  (x-n-continue '(1 2 2 2 3) 1 3) returns #f
+(define (x-n-continue lst x n) ;;n must be a nonnegative integer
+  (if (equal? n 0) #t
+      (if (equal? n 1) #t
+          (if (not (equal? (n-of-list x lst) (n-of-list (+ x (- n 1)) lst))) #f
+              (x-n-continue lst x (- n 1))))))
+
+;;check if win by diagonal upperleft to lowerright
+;;initial i=0
+;;(upperleft-lowerright? '(X O O O X O O O X) 'X 0) -> #t
+(define (upperleft-lowerright? board player i) ;; i=0..(n-1) index: i*(n-1)
+  (if (> i (- (sqrt (count (lambda (x) #t) board)) 1)) #t
+      (if (not (equal? (n-of-list (* i (+ 1 (sqrt (count (lambda (x) #t) board)))) board) player)) #f
+          (upperleft-lowerright? board player (+ i 1)))))
+                                               
+;; SOME BUG HERE      
+;;(upperright-lowerleft? '(O O X O X O X O O) 'X 1)
+;;(upperright-lowerleft? '(O O O X O O X O O X O O X O O O) 'X 1) -> #t
+;;(upperright-lowerleft? '(O X X O) 'X 1) -> #t
+(define (upperright-lowerleft? board player i) ;; i=1..n index: i*(n-1)
+  (if (> i (sqrt (count (lambda (x) #t) board)))
+      #t
+      (if (not (equal? (n-of-list (* i (- (sqrt (count (lambda (x) #t) board)) 1)) board) player)) #f
+          (upperright-lowerleft? board player (+ i 1)))))
+                                              
+
+                
+;;; The board is the list containing E O X 
+;;; Player will always be 'O
+;;; returns a pair of x and y
+(define (calculate-next-move board player)
+  (define size (sqrt (count (lambda (x) #t) board)))
+  'todo)
+  
+  
+  
+
+;;Helper function opposite-player
+(define (opposite-player p)
+  (match p
+    ['O 'X]
+    ['X 'O]))
+;;Helper: check if the game is tie
+(define (tie? board)
+  (define num-O (number-of-symbol 'O board))
+  (define num-X (number-of-symbol 'X board))
+  (if (equal? (winner? board) #f)
+      (equal? (length board) (+ num-O num-X))
+      #f))
+;;Helper: min-f-lst, given a list, for any element x in the list, find the minimum (f x)
+(define (min-f-lst f lst current-min extra) ;;initial current-min with +inf.0 Since minimax has two arguments, I add 'extra'
+  (if (empty? lst)
+      #f
+      (if (equal? (length lst) 1)
+          (min (f (car lst) extra) current-min)
+          (if (< (f (car lst)) current-min)
+              (min-f-lst f (cdr lst) (f (car lst) extra))
+              (min-f-lst f (cdr lst) current-min extra)))))
+;;Helper: max-f-lst
+(define (max-f-lst f lst current-max extra) ;;initial current-max with -inf.0
+  (if (empty? lst)
+      #f
+      (if (equal? (length lst) 1)
+          (max (f (car lst) extra) current-max)
+          (if (> (f (car lst)) current-min)
+              (min-f-lst f (cdr lst) (f (car lst) extra) extra)
+              (min-f-lst f (cdr lst) current-max extra)))))
+;;Helper function minimax, return a score
+(define (minimax board ai-player)
+  (if (equal? (winner? board) ai-player)
+      1
+      (if (equal? (winner? board) (opposite-player ai-player))
+          -1
+          (if (tie? board)
+              0
+              (if (equal? (next-player board) ai-player)
+                  (max-f-lst minimax board -inf.0 ai-player)
+                  
+                  
+                  
+               
+      
